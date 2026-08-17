@@ -1,0 +1,107 @@
+#include <stdio.h>
+#include <stdlib.h>
+typedef struct {
+    int enqueueTime;
+    int processingTime;
+    int index;
+} CPUTask;
+int compareTasks(const void* a, const void* b) {
+    CPUTask* t1 = (CPUTask*)a;
+    CPUTask* t2 = (CPUTask*)b;
+    if (t1->enqueueTime != t2->enqueueTime) {
+        return (t1->enqueueTime > t2->enqueueTime) - (t1->enqueueTime < t2->enqueueTime);
+    }
+    return (t1->index > t2->index) - (t1->index < t2->index);
+}
+typedef struct {
+    CPUTask* data;
+    int size;
+    int capacity;
+} MinHeap;
+MinHeap* createMinHeap(int capacity) {
+    MinHeap* heap = (MinHeap*)malloc(sizeof(MinHeap));
+    heap->data = (CPUTask*)malloc(sizeof(CPUTask) * (capacity + 1));
+    heap->size = 0;
+    heap->capacity = capacity;
+    return heap;
+}
+void swap(CPUTask* a, CPUTask* b) {
+    CPUTask temp = *a;
+    *a = *b;
+    *b = temp;
+}
+int compareHeapElements(CPUTask t1, CPUTask t2) {
+    if (t1.processingTime != t2.processingTime) {
+        return (t1.processingTime > t2.processingTime) - (t1.processingTime < t2.processingTime);
+    }
+    return (t1.index > t2.index) - (t1.index < t2.index);
+}
+void push(MinHeap* heap, CPUTask task) {
+    heap->size++;
+    int i = heap->size;
+    heap->data[i] = task;
+    
+    while (i > 1 && compareHeapElements(heap->data[i], heap->data[i / 2]) < 0) {
+        swap(&heap->data[i], &heap->data[i / 2]);
+        i = i / 2;
+    }
+}
+CPUTask pop(MinHeap* heap) {
+    CPUTask top = heap->data[1];
+    heap->data[1] = heap->data[heap->size];
+    heap->size--;
+    
+    int i = 1;
+    while (2 * i <= heap->size) {
+        int left = 2 * i;
+        int right = 2 * i + 1;
+        int smallest = left;
+        
+        if (right <= heap->size && compareHeapElements(heap->data[right], heap->data[left]) < 0) {
+            smallest = right;
+        }
+        
+        if (compareHeapElements(heap->data[smallest], heap->data[i]) < 0) {
+            swap(&heap->data[i], &heap->data[smallest]);
+            i = smallest;
+        } else {
+            break;
+        }
+    }
+    return top;
+}
+void freeMinHeap(MinHeap* heap) {
+    free(heap->data);
+    free(heap);
+}
+int* getOrder(int** tasks, int tasksSize, int* tasksColSize, int* returnSize) {
+    CPUTask* extTasks = (CPUTask*)malloc(sizeof(CPUTask) * tasksSize);
+    for (int i = 0; i < tasksSize; i++) {
+        extTasks[i].enqueueTime = tasks[i][0];
+        extTasks[i].processingTime = tasks[i][1];
+        extTasks[i].index = i;
+    }   
+    qsort(extTasks, tasksSize, sizeof(CPUTask), compareTasks);
+    
+    MinHeap* heap = createMinHeap(tasksSize);
+    int* result = (int*)malloc(sizeof(int) * tasksSize);
+    *returnSize = tasksSize;
+    long long currentTime = 0;
+    int taskIdx = 0;
+    int resultIdx = 0;
+    while (resultIdx < tasksSize) {
+        if (heap->size == 0 && currentTime < extTasks[taskIdx].enqueueTime) {
+            currentTime = extTasks[taskIdx].enqueueTime;
+        }
+        while (taskIdx < tasksSize && extTasks[taskIdx].enqueueTime <= currentTime) {
+            push(heap, extTasks[taskIdx]);
+            taskIdx++;
+        }
+        CPUTask currentTask = pop(heap);
+        result[resultIdx++] = currentTask.index;
+        currentTime += currentTask.processingTime;
+    }
+    free(extTasks);
+    freeMinHeap(heap);
+    return result;
+}
