@@ -1,0 +1,110 @@
+#include <stdio.h>
+#include <stdlib.h>
+typedef struct {
+    int weight;
+    int index;
+    long long free_time; 
+} Server;
+typedef struct {
+    Server* data;
+    int size;
+    int capacity;
+} MinHeap;
+MinHeap* createHeap(int capacity) {
+    MinHeap* heap = (MinHeap*)malloc(sizeof(MinHeap));
+    heap->data = (Server*)malloc(sizeof(Server) * capacity);
+    heap->size = 0;
+    heap->capacity = capacity;
+    return heap;
+}
+void freeHeap(MinHeap* heap) {
+    free(heap->data);
+    free(heap);
+}
+int compareFree(Server a, Server b) {
+    if (a.weight != b.weight) {
+        return (a.weight < b.weight) ? -1 : 1;
+    }
+    return (a.index < b.index) ? -1 : 1;
+}
+int compareBusy(Server a, Server b) {
+    if (a.free_time != b.free_time) {
+        return (a.free_time < b.free_time) ? -1 : 1;
+    }
+    if (a.weight != b.weight) {
+        return (a.weight < b.weight) ? -1 : 1;
+    }
+    return (a.index < b.index) ? -1 : 1;
+}
+void swap(Server* a, Server* b) {
+    Server temp = *a;
+    *a = *b;
+    *b = temp;
+}
+void push(MinHeap* heap, Server s, int (*compare)(Server, Server)) {
+    heap->data[heap->size] = s;
+    int i = heap->size;
+    heap->size++;
+    while (i > 0) {
+        int p = (i - 1) / 2;
+        if (compare(heap->data[i], heap->data[p]) < 0) {
+            swap(&heap->data[i], &heap->data[p]);
+            i = p;
+        } else {
+            break;
+        }
+    }
+}
+Server pop(MinHeap* heap, int (*compare)(Server, Server)) {
+    Server top = heap->data[0];
+    heap->size--;
+    heap->data[0] = heap->data[heap->size];
+    int i = 0;
+    while (2 * i + 1 < heap->size) {
+        int left = 2 * i + 1;
+        int right = 2 * i + 2;
+        int smallest = left;
+        
+        if (right < heap->size && compare(heap->data[right], heap->data[left]) < 0) {
+            smallest = right;
+        }
+        if (compare(heap->data[smallest], heap->data[i]) < 0) {
+            swap(&heap->data[i], &heap->data[smallest]);
+            i = smallest;
+        } else {
+            break;
+        }
+    }
+    return top;
+}
+int* assignTasks(int* servers, int serversSize, int* tasks, int tasksSize, int* returnSize) {
+    *returnSize = tasksSize;
+    int* ans = (int*)malloc(sizeof(int) * tasksSize);
+    MinHeap* free_heap = createHeap(serversSize);
+    MinHeap* busy_heap = createHeap(serversSize);
+    for (int i = 0; i < serversSize; i++) {
+        Server s = {servers[i], i, 0};
+        push(free_heap, s, compareFree);
+    }
+    long long current_time = 0;
+    for (int i = 0; i < tasksSize; i++) {
+        if (current_time < i) {
+            current_time = i;
+        }
+        if (free_heap->size == 0 && busy_heap->size > 0) {
+            current_time = busy_heap->data[0].free_time;
+        }
+        while (busy_heap->size > 0 && busy_heap->data[0].free_time <= current_time) {
+            Server finished = pop(busy_heap, compareBusy);
+            push(free_heap, finished, compareFree);
+        }
+        Server optimal_server = pop(free_heap, compareFree);
+        ans[i] = optimal_server.index;
+        optimal_server.free_time = current_time + tasks[i];
+        push(busy_heap, optimal_server, compareBusy);
+    }
+    freeHeap(free_heap);
+    freeHeap(busy_heap);
+    
+    return ans;
+}
