@@ -1,0 +1,153 @@
+#include <stdio.h>
+#include <stdlib.h>
+typedef struct Node {
+    int key;
+    int value;
+    struct Node* prev;
+    struct Node* next;
+} Node;
+typedef struct HashNode {
+    int key;
+    Node* node;
+    struct HashNode* next;
+} HashNode;
+typedef struct {
+    int capacity;
+    int size;
+    int hashSize;
+    Node* head;
+    Node* tail;
+    HashNode** hashMap;
+} LRUCache;
+Node* createNode(int key, int value) {
+    Node* node = (Node*)malloc(sizeof(Node));
+    node->key = key;
+    node->value = value;
+    node->prev = NULL;
+    node->next = NULL;
+    return node;
+}
+void removeNode(LRUCache* cache, Node* node) {
+    if (node->prev) node->prev->next = node->next;
+    else cache->head = node->next;
+
+    if (node->next) node->next->prev = node->prev;
+    else cache->tail = node->prev;
+}
+void moveToHead(LRUCache* cache, Node* node) {
+    node->next = cache->head;
+    node->prev = NULL;
+
+    if (cache->head) cache->head->prev = node;
+    cache->head = node;
+
+    if (!cache->tail) cache->tail = node;
+}
+int hash(int key, int hashSize) {
+    int h = key % hashSize;
+    return h < 0 ? h + hashSize : h;
+}
+void hashPut(LRUCache* cache, int key, Node* node) {
+    int idx = hash(key, cache->hashSize);
+    HashNode* curr = cache->hashMap[idx];
+    while (curr) {
+        if (curr->key == key) {
+            curr->node = node;
+            return;
+        }
+        curr = curr->next;
+    }
+    HashNode* newHashNode = (HashNode*)malloc(sizeof(HashNode));
+    newHashNode->key = key;
+    newHashNode->node = node;
+    newHashNode->next = cache->hashMap[idx];
+    cache->hashMap[idx] = newHashNode;
+}
+Node* hashGet(LRUCache* cache, int key) {
+    int idx = hash(key, cache->hashSize);
+    HashNode* curr = cache->hashMap[idx];
+    while (curr) {
+        if (curr->key == key) return curr->node;
+        curr = curr->next;
+    }
+    return NULL;
+}
+void hashRemove(LRUCache* cache, int key) {
+    int idx = hash(key, cache->hashSize);
+    HashNode* curr = cache->hashMap[idx];
+    HashNode* prev = NULL;
+    while (curr) {
+        if (curr->key == key) {
+            if (prev) prev->next = curr->next;
+            else cache->hashMap[idx] = curr->next;
+            free(curr);
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+}
+LRUCache* lRUCacheCreate(int capacity) {
+    LRUCache* cache = (LRUCache*)malloc(sizeof(LRUCache));
+    cache->capacity = capacity;
+    cache->size = 0;
+ 
+    cache->hashSize = capacity * 2 + 1; 
+    cache->head = NULL;
+    cache->tail = NULL;
+    cache->hashMap = (HashNode**)calloc(cache->hashSize, sizeof(HashNode*));
+    return cache;
+}
+int lRUCacheGet(LRUCache* obj, int key) {
+    Node* node = hashGet(obj, key);
+    if (!node) return -1;
+    removeNode(obj, node);
+    moveToHead(obj, node);
+    return node->value;
+}
+void lRUCachePut(LRUCache* obj, int key, int value) {
+    Node* node = hashGet(obj, key);
+    
+    if (node) {
+        node->value = value;
+        removeNode(obj, node);
+        moveToHead(obj, node);
+    } else {
+        // New Key entry
+        Node* newNode = createNode(key, value);
+        
+        if (obj->size >= obj->capacity) {
+            // Cache full: Evict the least recently used element (tail)
+            Node* lruNode = obj->tail;
+            removeNode(obj, lruNode);
+            hashRemove(obj, lruNode->key);
+            free(lruNode);
+            obj->size--;
+        }
+        
+        moveToHead(obj, newNode);
+        hashPut(obj, key, newNode);
+        obj->size++;
+    }
+}
+
+// Free allocated memory
+void lRUCacheFree(LRUCache* obj) {
+    Node* curr = obj->head;
+    while (curr) {
+        Node* next = curr->next;
+        free(curr);
+        curr = next;
+    }
+    
+    for (int i = 0; i < obj->hashSize; i++) {
+        HashNode* hashCurr = obj->hashMap[i];
+        while (hashCurr) {
+            HashNode* tmp = hashCurr->next;
+            free(hashCurr);
+            hashCurr = tmp;
+        }
+    }
+    free(obj->hashMap);
+    free(obj);
+}
