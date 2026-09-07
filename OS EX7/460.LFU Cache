@@ -1,0 +1,52 @@
+from collections import defaultdict, OrderedDict
+
+class LFUCache:
+
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.key_to_val_freq = {}               # Maps: key -> (value, frequency)
+        self.freq_to_keys = defaultdict(OrderedDict) # Maps: frequency -> OrderedDict of keys
+        self.min_freq = 0                       # Tracks the global minimum frequency
+
+    def get(self, key: int) -> int:
+        if key not in self.key_to_val_freq:
+            return -1
+        
+        # Extract current value and frequency
+        val, freq = self.key_to_val_freq[key]
+        
+        # Remove from the current frequency bucket
+        del self.freq_to_keys[freq][key]
+        
+        # If the minimum frequency bucket becomes empty, increment global min_freq
+        if not self.freq_to_keys[self.min_freq]:
+            self.min_freq += 1
+            
+        # Update to the new incremented frequency
+        new_freq = freq + 1
+        self.key_to_val_freq[key] = (val, new_freq)
+        self.freq_to_keys[new_freq][key] = True # Mark as recently used in the new bucket
+        
+        return val
+
+    def put(self, key: int, value: int) -> None:
+        if self.capacity <= 0:
+            return
+        
+        # Case 1: Key already exists, update value and bump frequency
+        if key in self.key_to_val_freq:
+            _, freq = self.key_to_val_freq[key]
+            self.key_to_val_freq[key] = (value, freq)
+            self.get(key) # Reuses get() logic to update frequency mappings smoothly
+            return
+        
+        # Case 2: Capacity reached, evict the LFU (and LRU tie-breaker) element
+        if len(self.key_to_val_freq) >= self.capacity:
+            # popitem(last=False) pops the oldest inserted item (FIFO / LRU) in O(1)
+            evict_key, _ = self.freq_to_keys[self.min_freq].popitem(last=False)
+            del self.key_to_val_freq[evict_key]
+            
+        # Case 3: Insert new item
+        self.key_to_val_freq[key] = (value, 1)
+        self.freq_to_keys[1][key] = True
+        self.min_freq = 1 # Reset minimum frequency back to 1 for the new element
